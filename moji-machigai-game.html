@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>文字の間違い探しゲーム</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      margin: 0;
+      font-family: "Yu Gothic UI", "Meiryo", sans-serif;
+      background: #ffffff;
+      color: #000000;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      box-sizing: border-box;
+    }
+    .card {
+      width: min(900px, 100%);
+      background: #ffffff;
+      border: 3px solid #000000;
+      border-radius: 14px;
+      box-shadow: none;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+      font-weight: 800;
+    }
+    p {
+      margin: 8px 0;
+      line-height: 1.6;
+      font-size: 1.2rem;
+    }
+    .info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin: 18px 0;
+      font-size: 1.3rem;
+    }
+    .badge {
+      background: #ffffff;
+      color: #000000;
+      border: 2px solid #000000;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-weight: 800;
+    }
+    .grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 10px;
+      user-select: none;
+    }
+    .cell {
+      border: 2px solid #000000;
+      border-radius: 8px;
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 800;
+      text-align: center;
+      padding: 14px 0;
+      background: #ffffff;
+      color: #000000;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .cell:hover {
+      background: #f0f0f0;
+    }
+    .cell.correct {
+      background: #d9f99d;
+      border-color: #000000;
+      color: #000000;
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 2px solid #000000;
+      background: #ffffff;
+      color: #000000;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #f0f0f0;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .message {
+      margin-top: 16px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      min-height: 1.4em;
+    }
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: repeat(6, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>文字の間違い探しゲーム</h1>
+    <p>同じ文字の中に<strong>1つだけ違う文字</strong>が混ざっています。見つけてクリックしてください。</p>
+    <div class="info">
+      <span class="badge">ステージ: <span id="stage">1</span></span>
+      <span class="badge">残り時間: <span id="time">20</span> 秒</span>
+      <span class="badge">スコア: <span id="score">0</span></span>
+    </div>
+
+    <section id="grid" class="grid" aria-label="ゲームエリア"></section>
+
+    <div class="controls">
+      <button id="restart">最初から</button>
+      <button id="next" disabled>次のステージへ</button>
+    </div>
+    <p id="message" class="message"></p>
+  </main>
+
+  <script>
+    const pairs = [
+      ["シ", "ツ"],
+      ["ソ", "ン"],
+      ["ロ", "口"],
+      ["O", "0"],
+      ["l", "I"],
+      ["さ", "ち"],
+      ["ぬ", "め"],
+      ["6", "9"]
+    ];
+
+    const state = {
+      stage: 1,
+      score: 0,
+      time: 20,
+      timerId: null,
+      targetIndex: -1,
+      solved: false
+    };
+
+    const stageEl = document.getElementById("stage");
+    const timeEl = document.getElementById("time");
+    const scoreEl = document.getElementById("score");
+    const gridEl = document.getElementById("grid");
+    const messageEl = document.getElementById("message");
+    const restartBtn = document.getElementById("restart");
+    const nextBtn = document.getElementById("next");
+
+    function getGridSize(stage) {
+      if (stage <= 2) return 40;
+      if (stage <= 4) return 60;
+      return 80;
+    }
+
+    function getTimeByStage(stage) {
+      return Math.max(8, 20 - stage * 2);
+    }
+
+    function pickPair() {
+      return pairs[Math.floor(Math.random() * pairs.length)];
+    }
+
+    function renderStage() {
+      clearInterval(state.timerId);
+      state.solved = false;
+      nextBtn.disabled = true;
+      messageEl.textContent = "";
+
+      const [normalChar, oddChar] = pickPair();
+      const count = getGridSize(state.stage);
+      state.time = getTimeByStage(state.stage);
+      state.targetIndex = Math.floor(Math.random() * count);
+
+      gridEl.innerHTML = "";
+      for (let i = 0; i < count; i += 1) {
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "cell";
+        cell.textContent = i === state.targetIndex ? oddChar : normalChar;
+        cell.dataset.index = String(i);
+        cell.addEventListener("click", () => onCellClick(i));
+        gridEl.appendChild(cell);
+      }
+
+      updateHud();
+      state.timerId = setInterval(tick, 1000);
+    }
+
+    function tick() {
+      state.time -= 1;
+      updateHud();
+      if (state.time <= 0) {
+        clearInterval(state.timerId);
+        messageEl.textContent = "時間切れ！もう一度チャレンジしてください。";
+        revealAnswer();
+      }
+    }
+
+    function onCellClick(index) {
+      if (state.solved || state.time <= 0) return;
+      if (index === state.targetIndex) {
+        state.solved = true;
+        clearInterval(state.timerId);
+        state.score += Math.max(10, state.time * 5);
+        messageEl.textContent = "正解！すごい！";
+        nextBtn.disabled = false;
+        revealAnswer();
+        updateHud();
+      } else {
+        state.time = Math.max(0, state.time - 2);
+        messageEl.textContent = "違います！-2秒";
+        updateHud();
+      }
+    }
+
+    function revealAnswer() {
+      const cells = gridEl.querySelectorAll(".cell");
+      const target = cells[state.targetIndex];
+      if (target) {
+        target.classList.add("correct");
+      }
+    }
+
+    function updateHud() {
+      stageEl.textContent = String(state.stage);
+      timeEl.textContent = String(state.time);
+      scoreEl.textContent = String(state.score);
+    }
+
+    restartBtn.addEventListener("click", () => {
+      state.stage = 1;
+      state.score = 0;
+      renderStage();
+    });
+
+    nextBtn.addEventListener("click", () => {
+      state.stage += 1;
+      renderStage();
+    });
+
+    renderStage();
+  </script>
+</body>
+</html>
